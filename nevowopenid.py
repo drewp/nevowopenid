@@ -1,3 +1,27 @@
+"""
+This source file (nevowopenid.py) is available under the MIT License.
+
+Copyright (c) 2009 Drew Perttula
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+"""
 import string
 from openid.cryptutil import randomString
 import openid.consumer.consumer
@@ -17,7 +41,7 @@ def getOrCreateCookie(request):
         sessionid = makeCookie()
         request.addCookie('s', sessionid, expires=None,
                           domain=None, path='/', max_age=None,
-                          comment=None, secure=None)
+                          comment=None, secure=False)
     return sessionid
 
 class OpenidLogin(rend.Page):
@@ -113,7 +137,11 @@ class WithOpenid(object):
         resource. You don't have to ever raise here; you can always
         use the id in self.identity in the rest of your page processing."""
         pass
-        
+
+        # example:
+        # if self.identity not in ['http://example.com/id1', 'http://example.com/id2']:
+        #    raise ValueError("unknown user")
+
     def getOpenidIdentity(self, ctx):
         """
         Either an openid identity url that has been verified, or None. If
