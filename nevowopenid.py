@@ -56,9 +56,6 @@ class OpenidLogin(rend.Page):
                T.input(type='submit', value='Use yahoo account')],
             ])
 
-def needOpenidUrl():
-    return OpenidLogin()
-
 def userGaveOpenid(request, sessionDict, userOpenidUrl, here, realm):
     # stash the user's requested openid in another cookie, so future
     # logins can try that one first? Good for server restarts, but I'm
@@ -88,7 +85,7 @@ def getSessionDict(ctx):
     sessionDict = sess.setdefault(sessionid, {}) # grows forever
     return sessionDict
 
-def openidStep(ctx, here):
+def openidStep(ctx, here, needOpenidUrl):
     """When getIdentity returns None, keep returning the result of
     this function. It will be a login page or some url redirect.
 
@@ -119,7 +116,7 @@ class WithOpenid(object):
         self.identity = self.getOpenidIdentity(ctx)
         if self.identity is None:
             request = inevow.IRequest(ctx)
-            return openidStep(ctx, self.fullUrl(ctx)), []
+            return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl), []
 
         self.verifyIdentity()
         
@@ -148,3 +145,8 @@ class WithOpenid(object):
         you get None, use openidStep to start the openid consumer sequence.
         """
         return getSessionDict(ctx).get('identity', None)
+
+    def needOpenidUrl(self):
+        """return a form to get a parameter named 'openid' with the
+        user's requested openid url"""
+        return OpenidLogin()
