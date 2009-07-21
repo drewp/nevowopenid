@@ -119,6 +119,8 @@ class WithOpenid(object):
             return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl), []
 
         self.verifyIdentity()
+        # todo: if this raises, we should forget this user's cookie so
+        # he can try again with a different id.
         
         return super(WithOpenid, self).locateChild(ctx, segments)
 
@@ -129,7 +131,7 @@ class WithOpenid(object):
         request = inevow.IRequest(ctx)
         return 'http://bigasterisk.com/exchangeMeeting' + request.path
 
-    def verifyOpenid(self):
+    def verifyIdentity(self):
         """raise if self.identity is not allowed to access the
         resource. You don't have to ever raise here; you can always
         use the id in self.identity in the rest of your page processing."""
