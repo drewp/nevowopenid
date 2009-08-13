@@ -119,11 +119,30 @@ class WithOpenid(object):
         locateChild, self.identity will be set to the openid url that
         we verified."""
         self.identity = self.getOpenidIdentity(ctx)
-        if self.identity is None:
-            request = inevow.IRequest(ctx)
-            return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
-                              self.getRealm(ctx)), []
 
+        if self.identity is None:
+            if (not self.anonymousAllowed(ctx) or
+                # you can always use /login to start the login sequence
+                # (useful if this resource is allowing anonymous
+                # users). This could be a problem if your real resource
+                # has a /login child
+                segments == ('login',)):
+                request = inevow.IRequest(ctx)
+                return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
+                                  self.getRealm(ctx)), []
+
+
+        if segments == ('login',):
+            # we don't want to come back to this login page once we're
+            # logged in; so I just go to the root. Someday we might
+            # want a return-to-this-page variable to get used. A
+            # better redirect would be to use this resource without
+            # the /login component, but that's hard to get right
+            # (vhosts, etc).
+            request = inevow.IRequest(ctx)
+            request.redirect('/')
+            return "", []
+        
         try:
             self.verifyIdentity(ctx)
         except ValueError:
@@ -131,6 +150,16 @@ class WithOpenid(object):
             raise
         
         return super(WithOpenid, self).locateChild(ctx, segments)
+
+
+    def anonymousAllowed(self, ctx):
+        """should we intercept requests and prompt for openid?
+
+        Note that either way, verifyIdentity will be called, so if you
+        return True here you also need to allow a self.identity of
+        None in the verifyIdentity method
+        """
+        return False
 
     def fullUrl(self, ctx):
         """
