@@ -85,7 +85,12 @@ def getSessionDict(ctx):
     sessionDict = sess.setdefault(sessionid, {}) # grows forever
     return sessionDict
 
-def openidStep(ctx, here, needOpenidUrl):
+def forgetSession(ctx):
+    request = inevow.IRequest(ctx)
+    sessionid = getOrCreateCookie(request)
+    del sess[sessionid]
+
+def openidStep(ctx, here, needOpenidUrl, realm):
     """When getIdentity returns None, keep returning the result of
     this function. It will be a login page or some url redirect.
 
@@ -99,7 +104,7 @@ def openidStep(ctx, here, needOpenidUrl):
         return returnedFromProvider(request, sessionDict, here)
     elif ctx.arg('openid') is not None:
         return userGaveOpenid(request, sessionDict, ctx.arg('openid'),
-                              here, realm="http://bigasterisk.com/")
+                              here, realm=realm)
     else:
         return needOpenidUrl()
 
@@ -116,11 +121,14 @@ class WithOpenid(object):
         self.identity = self.getOpenidIdentity(ctx)
         if self.identity is None:
             request = inevow.IRequest(ctx)
-            return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl), []
+            return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
+                              self.getRealm(ctx)), []
 
-        self.verifyIdentity()
-        # todo: if this raises, we should forget this user's cookie so
-        # he can try again with a different id.
+        try:
+            self.verifyIdentity(ctx)
+        except ValueError:
+            forgetSession(ctx)
+            raise
         
         return super(WithOpenid, self).locateChild(ctx, segments)
 
@@ -131,7 +139,10 @@ class WithOpenid(object):
         request = inevow.IRequest(ctx)
         return 'http://bigasterisk.com/exchangeMeeting' + request.path
 
-    def verifyIdentity(self):
+    def getRealm(self, ctx):
+        return "http://bigasterisk.com/"
+
+    def verifyIdentity(self, ctx):
         """raise if self.identity is not allowed to access the
         resource. You don't have to ever raise here; you can always
         use the id in self.identity in the rest of your page processing."""
