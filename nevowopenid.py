@@ -22,7 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 """
-import string
+import string, os
+# google logins work better with python_openid==2.2.4
 from openid.cryptutil import randomString
 import openid.consumer.consumer
 import openid.store.filestore
@@ -39,7 +40,7 @@ def getOrCreateCookie(request):
     sessionid = request.getCookie('s')
     if sessionid is None:
         sessionid = makeCookie()
-        request.addCookie('s', sessionid, expires=None,
+        request.addCookie('s', sessionid, expires="Wed, 01 Jan 2020 00:00:00 GMT",
                           domain=None, path='/', max_age=None,
                           comment=None, secure=False)
     return sessionid
@@ -56,13 +57,26 @@ class OpenidLogin(rend.Page):
                T.input(type='submit', value='Use yahoo account')],
             ])
 
+def expandOpenidProviderAbbreviation(url):
+    """user can give some shorthand words instead of openid provider
+    URLs. This helps fit certain links on one line of email"""
+    d = {
+        'google' : 'https://www.google.com/accounts/o8/id',
+        'yahoo' : 'yahoo.com',
+        }
+    return d.get(url, url)
+
 def userGaveOpenid(request, sessionDict, userOpenidUrl, here, realm):
+    """
+    userOpenidUrl can be an abbreviation known to
+    expandOpenidProviderAbbreviation
+    """
     # stash the user's requested openid in another cookie, so future
     # logins can try that one first? Good for server restarts, but I'm
     # not sure if it's appropriate UX for openid.
     
     c = openid.consumer.consumer.Consumer(sessionDict, store)
-    info = c.begin(userOpenidUrl)
+    info = c.begin(expandOpenidProviderAbbreviation(userOpenidUrl))
     redir = info.redirectURL(realm=realm, return_to=here)
     request.redirect(redir)
     return ""
@@ -126,6 +140,8 @@ class WithOpenid(object):
                 # (useful if this resource is allowing anonymous
                 # users). This could be a problem if your real resource
                 # has a /login child
+
+                # wrong- this needs to check after the site root, somehow
                 segments == ('login',)):
                 request = inevow.IRequest(ctx)
                 return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
@@ -138,10 +154,16 @@ class WithOpenid(object):
             # want a return-to-this-page variable to get used. A
             # better redirect would be to use this resource without
             # the /login component, but that's hard to get right
-            # (vhosts, etc).
+            # (vhosts, etc). Or, this could switch to ?openidLogin,
+            # which would probably be harmless and not need a
+            # redirect.
             request = inevow.IRequest(ctx)
             request.redirect('/')
             return "", []
+
+        if segments[-1] == 'logout':
+            forgetSession(ctx)
+            return self.logoutPage(), []
         
         try:
             self.verifyIdentity(ctx)
@@ -151,6 +173,9 @@ class WithOpenid(object):
         
         return super(WithOpenid, self).locateChild(ctx, segments)
 
+
+    def logoutPage(self):
+        return "Logged out."
 
     def anonymousAllowed(self, ctx):
         """should we intercept requests and prompt for openid?
