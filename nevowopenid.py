@@ -89,20 +89,33 @@ def returnedFromProvider(request, sessionDict, here):
         request.setResponseCode(http.UNAUTHORIZED)
         return "login failed: %s" % resp.message
     sessionDict['identity'] = resp.identity_url
+    
     # clear query params
     request.redirect(here)
     return ""
 
-def getSessionDict(ctx):    
+def syncSessionStore(sess, key=None):
+    if key is not None:
+        sess[key] = sess[key]
+    if hasattr(sess, 'sync'):
+        sess.sync()
+
+def getSessionDict(ctx):
+    """this is returning this session's key in the sessions dict too,
+    so you can pass it to syncSessionStore"""
     request = inevow.IRequest(ctx)
     sessionid = getOrCreateCookie(request)
-    sessionDict = sess.setdefault(sessionid, {}) # grows forever
-    return sessionDict
+    if sessionid not in sess:
+        sess[sessionid] = {}  # grows forever
+        syncSessionStore(sess)
+    sessionDict = sess[sessionid]
+    return sessionDict, sessionid
 
 def forgetSession(ctx):
     request = inevow.IRequest(ctx)
     sessionid = getOrCreateCookie(request)
     del sess[sessionid]
+    syncSessionStore(sess)
 
 def openidStep(ctx, here, needOpenidUrl, realm):
     """When getIdentity returns None, keep returning the result of
@@ -113,14 +126,16 @@ def openidStep(ctx, here, needOpenidUrl, realm):
     openid identity url."""
 
     request = inevow.IRequest(ctx)
-    sessionDict = getSessionDict(ctx)
+    sessionDict, key = getSessionDict(ctx)
     if ctx.arg('openid.identity') is not None:
-        return returnedFromProvider(request, sessionDict, here)
+        ret = returnedFromProvider(request, sessionDict, here)
     elif ctx.arg('openid') is not None:
-        return userGaveOpenid(request, sessionDict, ctx.arg('openid'),
+        ret = userGaveOpenid(request, sessionDict, ctx.arg('openid'),
                               here, realm=realm)
     else:
-        return needOpenidUrl()
+        ret = needOpenidUrl()
+    syncSessionStore(sess, key)
+    return ret
 
 class WithOpenid(object):
     """
@@ -211,7 +226,8 @@ class WithOpenid(object):
         Either an openid identity url that has been verified, or None. If
         you get None, use openidStep to start the openid consumer sequence.
         """
-        return getSessionDict(ctx).get('identity', None)
+        d, key = getSessionDict(ctx)
+        return d.get('identity', None)
 
     def needOpenidUrl(self):
         """return a form to get a parameter named 'openid' with the
