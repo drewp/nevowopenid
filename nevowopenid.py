@@ -130,8 +130,14 @@ def openidStep(ctx, here, needOpenidUrl, realm):
     sessionDict, key = getSessionDict(ctx)
     if ctx.arg('openid.identity') is not None:
         ret = returnedFromProvider(request, sessionDict, here)
-    elif ctx.arg('openid') is not None:
-        ret = userGaveOpenid(request, sessionDict, ctx.arg('openid'),
+    elif ctx.arg('openid') is not None or ctx.arg('openid_aol') is not None:
+
+        if ctx.arg('openid_aol') is not None:
+            openid = 'http://openid.aol.com/' + ctx.arg('openid_aol')
+        else:
+            openid = ctx.arg('openid')
+        
+        ret = userGaveOpenid(request, sessionDict, openid,
                               here, realm=realm)
     else:
         ret = needOpenidUrl()
