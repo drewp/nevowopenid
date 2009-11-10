@@ -40,7 +40,8 @@ def getOrCreateCookie(request):
     sessionid = request.getCookie('s')
     if sessionid is None:
         sessionid = makeCookie()
-        request.addCookie('s', sessionid, expires="Wed, 01 Jan 2020 00:00:00 GMT",
+        request.addCookie('s', sessionid,
+                          expires="Wed, 01-Jan-2020 00:00:00 GMT",
                           domain=None, path='/', max_age=None,
                           comment=None, secure=False)
     return sessionid
