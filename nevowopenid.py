@@ -137,6 +137,8 @@ def openidStep(ctx, here, needOpenidUrl, realm):
         else:
             openid = ctx.arg('openid')
         
+        # todo: if the user's url doesn't actually do openid, this
+        # will fail, and should make a better error message
         ret = userGaveOpenid(request, sessionDict, openid,
                               here, realm=realm)
     else:
@@ -163,14 +165,16 @@ class WithOpenid(object):
                 # users). This could be a problem if your real resource
                 # has a /login child
 
-                # wrong- this needs to check after the site root, somehow
-                segments == ('login',)):
+                # wrong- this needs to check after the site root,
+                # somehow. I don't mean to be matching -any- login
+                # segment, but it should be ok in practice
+                segments[-1] == 'login'):
                 request = inevow.IRequest(ctx)
                 return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
                                   self.getRealm(ctx)), []
 
 
-        if segments == ('login',):
+        if segments[-1] == 'login':
             # we don't want to come back to this login page once we're
             # logged in; so I just go to the root. Someday we might
             # want a return-to-this-page variable to get used. A
