@@ -101,12 +101,18 @@ def syncSessionStore(sess, key=None):
     if hasattr(sess, 'sync'):
         sess.sync()
 
-def getSessionDict(ctx):
+def getSessionDict(ctx, autocreate=True):
     """this is returning this session's key in the sessions dict too,
-    so you can pass it to syncSessionStore"""
+    so you can pass it to syncSessionStore.
+
+    If you haven't started a session, and autocreate is False, we
+    return (None, None)
+    """
     request = inevow.IRequest(ctx)
     sessionid = getOrCreateCookie(request)
     if sessionid not in sess:
+        if not autocreate:
+            return None, None
         sess[sessionid] = {}  # grows forever
         syncSessionStore(sess)
     sessionDict = sess[sessionid]
@@ -237,7 +243,9 @@ class WithOpenid(object):
         Either an openid identity url that has been verified, or None. If
         you get None, use openidStep to start the openid consumer sequence.
         """
-        d, key = getSessionDict(ctx)
+        d, key = getSessionDict(ctx, autocreate=False)
+        if d is None:
+            return None
         return d.get('identity', None)
 
     def needOpenidUrl(self):
