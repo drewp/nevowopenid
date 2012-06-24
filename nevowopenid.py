@@ -22,28 +22,38 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 """
-import string, os
+import string, os, logging, pprint
 # google logins work better with python_openid==2.2.4
 from openid.cryptutil import randomString
 import openid.consumer.consumer
 import openid.store.filestore
 from nevow import inevow, rend, tags as T, loaders
+from nevow.url import URL
 from twisted.web import http
-
+log = logging.getLogger()
 store = openid.store.filestore.FileOpenIDStore('/tmp/openid')
 sess = {} # sessionid : {}
 
 def makeCookie():
     return randomString(32, string.letters + string.digits)
 
+def addSessionCookie(request, value):
+    request.addCookie('s',
+            value.encode('ascii'), # http://twistedmatrix.com/trac/ticket/4782
+                      expires="Wed, 01-Jan-2020 00:00:00 GMT",
+                      domain=None, path='/', max_age=None,
+                      comment=None,
+                      secure=False, # waiting...
+                      )
+
+def hasSessionCookie(request):
+    return bool(request.getCookie('s'))
+
 def getOrCreateCookie(request):
     sessionid = request.getCookie('s')
     if sessionid is None:
         sessionid = makeCookie()
-        request.addCookie('s', sessionid,
-                          expires="Wed, 01-Jan-2020 00:00:00 GMT",
-                          domain=None, path='/', max_age=None,
-                          comment=None, secure=False)
+        addSessionCookie(request, sessionid)
     return sessionid
 
 class OpenidLogin(rend.Page):
@@ -77,7 +87,9 @@ def userGaveOpenid(request, sessionDict, userOpenidUrl, here, realm):
     # not sure if it's appropriate UX for openid.
     
     c = openid.consumer.consumer.Consumer(sessionDict, store)
-    info = c.begin(expandOpenidProviderAbbreviation(userOpenidUrl))
+    providerUrl = expandOpenidProviderAbbreviation(userOpenidUrl)
+    log.info("providerUrl: %s", providerUrl)
+    info = c.begin(providerUrl)
     redir = info.redirectURL(realm=realm, return_to=here)
     request.redirect(redir)
     return ""
@@ -90,9 +102,15 @@ def returnedFromProvider(request, sessionDict, here):
         request.setResponseCode(http.UNAUTHORIZED)
         return "login failed: %s" % resp.message
     sessionDict['identity'] = resp.identity_url
-    
-    # clear query params
-    request.redirect(here)
+
+    print "returned"
+    pprint.pprint(vars())
+    redir = dict(URL.fromString(here).queryList()).get('redir')
+    if redir is not None:
+        request.redirect('http://%s%s' % (request.getHeader('host'), redir)) # waiting...
+    else:
+        # todo: clear query params
+        request.redirect(here)
     return ""
 
 def syncSessionStore(sess, key=None):
@@ -162,7 +180,17 @@ class WithOpenid(object):
         the user is not yet logged in. But once it does call super's
         locateChild, self.identity will be set to the openid url that
         we verified."""
-        self.identity = self.getOpenidIdentity(ctx)
+        request = inevow.IRequest(ctx)
+        isSecure = self.requestIsSecure(request)
+
+        if hasSessionCookie(request) and not isSecure:
+            log.warn("they have sent a cookie without ssl, so we should kill it")
+            
+        # i guess here is where to see if they sent a cookie over
+        # http, and immediately invalidate it, and return an error
+        # page (or the login page, with an extra error message)
+
+        self.identity = self.getOpenidIdentity(ctx) if (1 or isSecure) else None # waiting...
 
         if self.identity is None:
             if (not self.anonymousAllowed(ctx) or
@@ -175,7 +203,12 @@ class WithOpenid(object):
                 # somehow. I don't mean to be matching -any- login
                 # segment, but it should be ok in practice
                 segments[-1] == 'login'):
-                request = inevow.IRequest(ctx)
+                if 0 and not isSecure: # waiting...
+                    secure = self.secureUrl(request)
+                    log.info("upgrading to https -> %s", secure)
+                    request.redirect(secure)
+                    return '', []
+
                 return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
                                   self.getRealm(ctx)), []
 
@@ -196,15 +229,25 @@ class WithOpenid(object):
         if segments[-1] == 'logout':
             forgetSession(ctx)
             return self.logoutPage(), []
-        
-        try:
-            self.verifyIdentity(ctx)
-        except ValueError:
-            forgetSession(ctx)
-            raise
+
+        self.verifyIdentity(ctx)
         
         return super(WithOpenid, self).locateChild(ctx, segments)
 
+    def secureUrl(self, request):
+        """the https version of this request"""
+        # doesn't get ports or users right; probably gets query params
+        # right. this is mainly used for /login though
+        return 'https://%s%s' % (request.getHeader('host'), request.uri)
+
+    def requestIsSecure(self, request):
+        """
+        is the client using SSL to talk to us? if we're behind a
+        proxy, this may not be the same as whether the nearest inbound
+        connection was SSL
+        """
+        raise NotImplementedError("not tested at all")
+        return request.isSecure()
 
     def logoutPage(self):
         return "Logged out."
