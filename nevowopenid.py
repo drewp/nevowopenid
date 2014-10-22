@@ -88,9 +88,11 @@ def userGaveOpenid(request, sessionDict, userOpenidUrl, here, realm):
     
     c = openid.consumer.consumer.Consumer(sessionDict, store)
     providerUrl = expandOpenidProviderAbbreviation(userOpenidUrl)
-    log.info("providerUrl: %s", providerUrl)
+    log.info("c.begin(providerUrl=%r)", providerUrl)
     info = c.begin(providerUrl)
+    log.info("info.redirectURL")
     redir = info.redirectURL(realm=realm, return_to=here)
+    log.info("redirect(%r)", redir)
     request.redirect(redir)
     return ""
     
