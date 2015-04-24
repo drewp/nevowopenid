@@ -43,7 +43,7 @@ def addSessionCookie(request, value):
                       expires="Wed, 01-Jan-2020 00:00:00 GMT",
                       domain=None, path='/', max_age=None,
                       comment=None,
-                      secure=False, # waiting...
+                      secure=True,
                       )
 
 def hasSessionCookie(request):
@@ -183,16 +183,12 @@ class WithOpenid(object):
         locateChild, self.identity will be set to the openid url that
         we verified."""
         request = inevow.IRequest(ctx)
-        isSecure = self.requestIsSecure(request)
-
-        if hasSessionCookie(request) and not isSecure:
-            log.warn("they have sent a cookie without ssl, so we should kill it")
             
         # i guess here is where to see if they sent a cookie over
         # http, and immediately invalidate it, and return an error
         # page (or the login page, with an extra error message)
 
-        self.identity = self.getOpenidIdentity(ctx) if (1 or isSecure) else None # waiting...
+        self.identity = self.getOpenidIdentity(ctx)
 
         if self.identity is None:
             if (not self.anonymousAllowed(ctx) or
@@ -205,11 +201,6 @@ class WithOpenid(object):
                 # somehow. I don't mean to be matching -any- login
                 # segment, but it should be ok in practice
                 segments[-1] == 'login'):
-                if 0 and not isSecure: # waiting...
-                    secure = self.secureUrl(request)
-                    log.info("upgrading to https -> %s", secure)
-                    request.redirect(secure)
-                    return '', []
 
                 return openidStep(ctx, self.fullUrl(ctx), self.needOpenidUrl,
                                   self.getRealm(ctx)), []
@@ -235,21 +226,6 @@ class WithOpenid(object):
         self.verifyIdentity(ctx)
         
         return super(WithOpenid, self).locateChild(ctx, segments)
-
-    def secureUrl(self, request):
-        """the https version of this request"""
-        # doesn't get ports or users right; probably gets query params
-        # right. this is mainly used for /login though
-        return 'https://%s%s' % (request.getHeader('host'), request.uri)
-
-    def requestIsSecure(self, request):
-        """
-        is the client using SSL to talk to us? if we're behind a
-        proxy, this may not be the same as whether the nearest inbound
-        connection was SSL
-        """
-        raise NotImplementedError("not tested at all")
-        return request.isSecure()
 
     def logoutPage(self):
         return "Logged out."
